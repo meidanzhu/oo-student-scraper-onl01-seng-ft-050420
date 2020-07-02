@@ -1,97 +1,49 @@
-
 require 'open-uri'
-require 'nokogiri'
 require 'pry'
 
 class Scraper
 
-def self.scrape_index_page(index_url)
-  html = open(index_url)
-  index = Nokogiri::HTML(html)
-  names = self.get_student_names(index)
-  locations = self.get_student_locations(index)
-  urls = self.get_student_profile_urls(index)
-  student_count = names.size
-  counter = 0
-  students = []
+  def self.scrape_index_page(index_url)
 
-  until counter == (student_count - 1) do
-    student = {
-      :name => names[counter],
-      :location => locations[counter],
-      :profile_url => urls[counter]
-    }
-    students << student
-    counter += 1
+    html = open(index_url)
+
+    file = Nokogiri::HTML(html)
+    students = file.css(".student-card")
+    students_arr = []
+
+    students.collect do |c|
+      students_arr << {
+        :name => c.css("h4.student-name").text,
+        :location => c.css("p.student-location").text,
+        :profile_url => c.css("a").attribute("href").value
+      }
+    end
+    students_arr
   end
-  students
-end
 
-#helper methods for self.scrape_index_page
+  def self.scrape_profile_page(profile_url)
 
-def self.get_student_names(index)
-  names = []
-  student_names = index.css('div.student-card h4.student-name')
-  student_names.each {|student| names << student.text}
-  names
-end
+    html = open(profile_url)
+    doc = Nokogiri::HTML(html)
+    attributes = {}
 
-def self.get_student_locations(index)
-  locations = []
-  student_locations = index.css('div.student-card p.student-location')
-  student_locations.each {|student| locations << student.text}
-  locations
-end
+    doc.css("div.social-icon-container a").each do |xml|
+      case xml.attribute("href").value
 
-def self.get_student_profile_urls(index)
-  profiles = []
-  student_profile_urls = index.css('div.student-card a')
-  student_profile_urls.each {|student| profiles << "./fixtures/student-site/" + student.attribute('href').value}
-  profiles
-end
+      when /github/
+        attributes[:github] = xml.attribute("href").value
+      when /linkedin/
+        attributes[:linkedin] = xml.attribute("href").value
+      when /twitter/
+        attributes[:twitter] = xml.attribute("href").value
+      else
+        attributes[:blog] = xml.attribute("href").value
+      end
 
-
-def self.scrape_profile_page(profile_url)
-  html = open(profile_url)
-  profile = Nokogiri::HTML(html)
-  twitter = self.get_social_media(profile).detect {|url| url.match(/\S*twitter.com\S*/)}
-  linkedin = self.get_social_media(profile).detect {|url| url.match(/\S*linkedin.com\S*/)}
-  github = self.get_social_media(profile).detect {|url| url.match(/\S*github.com\S*/)}
-  blog = self.get_social_media(profile).detect {|url| url != twitter && url != linkedin && url != github}
-  profile_quote = self.get_profile_quote(profile)
-  bio = self.get_bio(profile)
-
-  student = {
-    :twitter => twitter,
-    :linkedin => linkedin,
-    :github => github,
-    :blog => blog,
-    :profile_quote => profile_quote,
-    :bio => bio
-  }
-
-  self.clean_hash(student)
-end
-
-#helper methods for profile scraper
-
-def self.get_social_media(profile)
-  social_links = []
-  social_media = profile.css('div.social-icon-container a')
-  social_media.each {|link| social_links << link.attribute('href').value}
-  social_links
-end
-
-def self.get_profile_quote(profile)
-  profile_quote = profile.css('div.vitals-text-container div.profile-quote').text
-end
-
-def self.get_bio(profile)
-  bio = profile.css('div.bio-content.content-holder div.description-holder p').text
-end
-
-def self.clean_hash(student)
-  student.delete_if {|key, value| value == nil}
-end
+    end
+    attributes[:profile_quote] = doc.css("div.profile-quote").text
+    attributes[:bio] = doc.css("div.bio-content div.description-holder").text.strip
+    attributes
+  end
 
 end
