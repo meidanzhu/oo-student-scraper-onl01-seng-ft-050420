@@ -69,7 +69,7 @@ def self.scrape_profile_page(profile_url)
     :profile_quote => profile_quote,
     :bio => bio
   }
-  
+
   self.clean_hash(student)
 end
 
